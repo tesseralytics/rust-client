@@ -14,8 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Fetch OpenAPI spec
-        run: make fetch-spec
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -40,8 +38,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.toolchain }}
-      - name: Fetch OpenAPI spec
-        run: make fetch-spec
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.toolchain }}

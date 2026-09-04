@@ -7,7 +7,7 @@
 //! ([`PartitionRef`], [`MonthSpan`]).
 
 /// Generated OpenAPI response models, exempted from lint scrutiny.
-#[allow(clippy::all, clippy::pedantic)]
+#[allow(dead_code, clippy::all, clippy::pedantic)]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/tessera_generated.rs"));
 }

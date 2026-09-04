@@ -15,6 +15,8 @@ fn scalar_type(t: &str, ctx: &str) -> String {
     match t {
         "string" => "String".to_string(),
         "integer" => "i64".to_string(),
+        "number" => "f64".to_string(),
+        "boolean" => "bool".to_string(),
         other => panic!("codegen: unsupported schema construct in {ctx}: `type` {other}"),
     }
 }
@@ -92,6 +94,22 @@ fn push_doc(out: &mut String, name: &str, description: Option<&str>, indent: &st
     }
 }
 
+/// Escape a JSON property name that collides with a Rust keyword as a raw
+/// identifier (`type` → `r#type`); serde strips the `r#` on the wire.
+fn field_ident(name: &str) -> String {
+    match name {
+        "abstract" | "as" | "async" | "await" | "become" | "box" | "break" | "const"
+        | "continue" | "crate" | "do" | "dyn" | "else" | "enum" | "extern" | "false" | "final"
+        | "fn" | "for" | "if" | "impl" | "in" | "let" | "loop" | "macro" | "match" | "mod"
+        | "move" | "mut" | "override" | "priv" | "pub" | "ref" | "return" | "self" | "Self"
+        | "static" | "struct" | "super" | "trait" | "true" | "try" | "type" | "typeof"
+        | "union" | "unsafe" | "unsized" | "use" | "virtual" | "where" | "while" | "yield" => {
+            format!("r#{name}")
+        }
+        _ => name.to_string(),
+    }
+}
+
 fn emit_struct(out: &mut String, name: &str, schema: &serde_json::Value) {
     let obj = schema.as_object().unwrap_or_else(|| {
         panic!("codegen: unsupported schema construct in {name}: schema is not an object")
@@ -123,6 +141,7 @@ fn emit_struct(out: &mut String, name: &str, schema: &serde_json::Value) {
     let _ = writeln!(out, "pub struct {name} {{");
     for (prop_name, prop_schema) in properties {
         let ctx = format!("{name}.{prop_name}");
+        let field = field_ident(prop_name);
         let (base, nullable) = map_schema(prop_schema, &ctx);
         let required_field = required_set.contains(&prop_name.as_str()) && !nullable;
         push_doc(
@@ -134,10 +153,10 @@ fn emit_struct(out: &mut String, name: &str, schema: &serde_json::Value) {
             "    ",
         );
         if required_field {
-            let _ = writeln!(out, "    pub {prop_name}: {base},");
+            let _ = writeln!(out, "    pub {field}: {base},");
         } else {
             out.push_str("    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n");
-            let _ = writeln!(out, "    pub {prop_name}: Option<{base}>,");
+            let _ = writeln!(out, "    pub {field}: Option<{base}>,");
         }
     }
     out.push_str("}\n\n");
