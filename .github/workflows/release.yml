@@ -1,0 +1,27 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Configure a "crates-io" environment with trusted publishing on crates.io
+    # (https://crates.io/settings/publishing-trust). The crate must exist there
+    # before trusted publishing can be registered for it — the first publish
+    # may need a one-off API token instead.
+    environment:
+      name: crates-io
+      url: https://crates.io/crates/tessera-api
+    permissions:
+      id-token: write  # OIDC — no API token needed
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - id: crates-auth
+        uses: rust-lang/crates-io-auth-action@v1
+      - name: Publish to crates.io
+        run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}

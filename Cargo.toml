@@ -1,0 +1,25 @@
+[package]
+name = "tessera-api"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "High-performance Rust client for the Tessera API — Hyperliquid datasets straight into Polars & DuckDB."
+license = "GPL-3.0-only"
+readme = "README.md"
+repository = "https://github.com/tesseralytics/rust-client"
+homepage = "https://tesseralytics.dev"
+documentation = "https://docs.rs/tessera-api"
+keywords = ["hyperliquid", "crypto", "market-data", "ohlcv", "quant"]
+categories = ["api-bindings"]
+authors = ["Tessera <hello@tesseralytics.dev>"]
+
+[lib]
+name = "tessera"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

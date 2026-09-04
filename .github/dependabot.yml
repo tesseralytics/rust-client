@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # Runtime deps and the (future) dev-deps live in Cargo.toml + Cargo.lock.
+  # Dependabot resolves and rewrites the lockfile itself.
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      cargo-deps:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions-deps:
+        patterns:
+          - "*"
