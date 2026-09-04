@@ -20,6 +20,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Fetch OpenAPI spec
+        run: make fetch-spec
       - name: Build rustdoc
         run: cargo doc --no-deps --all-features
       - name: Generate landing redirect
