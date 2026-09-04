@@ -1,0 +1,39 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: docs
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build rustdoc
+        run: cargo doc --no-deps --all-features
+      - name: Generate landing redirect
+        run: |
+          echo '<!doctype html><meta charset="utf-8"><title>tessera-api</title><meta http-equiv="refresh" content="0; url=tessera/index.html"><a href="tessera/index.html">tessera</a>' > target/doc/index.html
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DOCS_ROLE_ARN }}
+          aws-region: ap-northeast-1
+      - name: Sync to S3
+        run: aws s3 sync target/doc/ s3://${{ vars.DOCS_BUCKET }}/rust-client/ --delete
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths '/rust-client/*'

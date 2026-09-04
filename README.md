@@ -63,6 +63,7 @@ Grab a free API key (no card required) at **[tesseralytics.dev](https://tesseral
 ## Documentation
 
 - 📚 Python SDK (full docs today): <https://tesseralytics.dev/python-client>
+- 🦀 Rust docs: <https://tesseralytics.dev/rust-client>
 - 🦀 docs.rs: <https://docs.rs/tessera-api>
 - 🌐 **Product & pricing:** <https://tesseralytics.dev>
 
