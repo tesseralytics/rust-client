@@ -25,21 +25,30 @@ No temp files, no glue code.
 
 ## Status
 
-**Under active development.** This repository currently holds the crate skeleton; the client
-surface lands with the first crates.io release.
+**Functional.** The client surface mirrors the Python SDK:
 
-```rust
-fn main() {
-    println!("{}, v{}", tessera::hello(), tessera::VERSION);
+```rust,no_run
+fn main() -> Result<(), tessera::TesseraError> {
+    let client = tessera::TesseraClient::new(None)?;
+    // Pick the newest available month
+    let latest = client
+        .partitions("gold_ohlcv_1m", Some("BTC"), None)?
+        .partitions
+        .pop()
+        .expect("at least one partition");
+    let df = client.read("gold_ohlcv_1m", "BTC", &latest.month, None)?;
+    println!("{} rows for {}", df.height(), latest.month);
+    Ok(())
 }
 ```
 
-## Roadmap
 
-- Async `TesseraClient` / `AsyncTesseraClient` mirroring the Python SDK
-- The `TesseraError` error taxonomy (`NotFoundError`, `PresignExpiredError`, …)
-- Catalog models: `DatasetSummary`, `MonthSpan`, `Partition`, …
-- Polars & DuckDB readers over presigned Parquet URLs
+- Sync `TesseraClient` and async `AsyncTesseraClient` mirroring the Python SDK
+- Response models generated from the vendored OpenAPI spec at build time
+- `TesseraError` taxonomy: `Configuration`, `NotFound`, `PresignExpired`, …
+- Catalog helpers: `DatasetSummary`, `MonthSpan`, `PartitionRef`, …
+- Polars reader (default feature) and DuckDB reader (`duckdb` feature) over
+  presigned Parquet URLs
 
 ## Install
 
