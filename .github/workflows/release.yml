@@ -17,7 +17,7 @@ jobs:
     permissions:
       id-token: write  # OIDC — no API token needed
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - id: crates-auth
         uses: rust-lang/crates-io-auth-action@v1
