@@ -39,7 +39,7 @@ percent-encoding = "2"
 fastrand = "2"
 futures = "0.3"
 polars = { version = "0.55", default-features = true, features = ["lazy", "parquet", "http"], optional = true }
-duckdb = { version = "1", features = ["bundled", "parquet"], optional = true }
+duckdb = { version = "1.10506", features = ["bundled", "parquet"], optional = true }
 
 [build-dependencies]
 serde_json = "1"
