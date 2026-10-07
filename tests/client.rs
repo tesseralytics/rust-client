@@ -108,7 +108,7 @@ fn partitions_without_filters_omits_query() {
 
     let client = client(server.uri());
     let partitions = client.partitions("anything", None, None).unwrap();
-    assert!(partitions.partitions.is_empty());
+    assert_eq!(partitions.partitions.len(), 0);
     rt.block_on(server.verify());
 }
 
