@@ -86,7 +86,7 @@ impl AsyncTesseraClient {
         parse_json(response).await
     }
 
-    /// List every dataset visible to your plan.
+    /// List every dataset visible to your entitlement.
     ///
     /// # Errors
     ///

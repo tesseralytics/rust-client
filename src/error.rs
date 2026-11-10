@@ -40,7 +40,7 @@ pub enum TesseraError {
         /// Human-readable message.
         message: String,
     },
-    /// 403 — your plan does not grant access to this dataset or coin.
+    /// 403 — your account is not entitled to this dataset or coin.
     #[error("{message}")]
     Forbidden {
         /// Machine-readable error code from the `{"error": ...}` body, if any.

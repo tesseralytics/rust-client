@@ -25,6 +25,14 @@
 //! - DuckDB (opt-in feature `duckdb`): `TesseraClient::to_duckdb` returns an
 //!   in-memory connection exposing a `tessera` view.
 //!
+//! ## Plans
+//!
+//! The free tier covers every coin and all three datasets over the trailing
+//! 30 days, served at month granularity (the current and previous calendar
+//! month). Closed history is sold as one-off bundles; [`TesseraClient::datasets`]
+//! and [`TesseraClient::partitions`] already reflect your entitlement, so the
+//! client needs no plan logic of its own.
+//!
 //! ## Errors
 //!
 //! Every failure raises [`TesseraError`], mirroring the Python exception
@@ -36,7 +44,7 @@
 //! # fn main() -> Result<(), tessera::TesseraError> {
 //! let client = tessera::TesseraClient::new(None)?;
 //! // Pick the newest available month rather than a hardcoded one:
-//! // partitions roll on a 12-month window, so fixed dates go stale.
+//! // partitions roll on a trailing 30-day window, so fixed dates go stale.
 //! let latest = client
 //!     .partitions("gold_ohlcv_1m", Some("BTC"), None)?
 //!     .partitions

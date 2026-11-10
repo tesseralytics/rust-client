@@ -135,7 +135,7 @@ impl TesseraClient {
         serde_json::from_slice(&body).map_err(|err| TesseraError::Network(err.to_string()))
     }
 
-    /// List every dataset visible to your plan.
+    /// List every dataset visible to your entitlement.
     ///
     /// # Errors
     ///

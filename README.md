@@ -43,7 +43,30 @@ Requires Rust 1.85+. Grab a free API key (no card required) at
 export TESSERA_API_KEY="ts_..."
 ```
 
-The free tier covers BTC, ETH, SOL and HYPE for the trailing month.
+The free tier covers every coin and all three datasets over the trailing 30 days; full
+history is available as one-off download bundles (see
+[Free tier and history bundles](#free-tier-and-history-bundles)).
+
+## Free tier and history bundles
+
+The free tier needs no card. It covers **every coin** and **all three datasets** —
+`gold_ohlcv_1m`, `gold_funding_1h` and `gold_positioning_1h` — over the trailing 30 days.
+The API serves that window at month granularity, so a free key sees the current and
+previous calendar month; the window is the only restriction.
+
+History beyond the window is sold as one-off download bundles of the **closed months**.
+Each bundle carries all three datasets, is frozen at purchase, and is perpetual on the
+account — every API key you hold inherits it:
+
+| Bundle | Markets | Price |
+| --- | --- | --- |
+| Tessera Majors | BTC, ETH, SOL, HYPE | $19 once |
+| Tessera HIP-3 (xyz) | Every `xyz:` HIP-3 market | $24 once |
+| Tessera All Markets | Every coin Tessera publishes | $29 once |
+
+The open month is never included. `datasets()` and `partitions()` already reflect your
+entitlement, so the client needs no plan logic of its own. See
+[pricing](https://tesseralytics.dev/pricing) for the full comparison.
 
 ## Quickstart
 
@@ -53,7 +76,7 @@ use tessera::TesseraClient;
 fn main() -> Result<(), tessera::TesseraError> {
     let client = TesseraClient::new(None)?; // reads $TESSERA_API_KEY
 
-    // Partitions roll on a trailing 12-month window, so discover the newest
+    // Partitions roll on a trailing 30-day window, so discover the newest
     // available month instead of hardcoding a date:
     let latest = client
         .partitions("gold_ohlcv_1m", Some("BTC"), None)?
@@ -82,7 +105,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lf = client.scan(
         "gold_ohlcv_1m",
         "BTC",
-        "2026-08",
+        "2026-10",
         Some(&["time", "close", "volume", "buy_vol", "sell_vol"]),
     )?;
 
@@ -121,7 +144,7 @@ fn main() -> Result<(), tessera::TesseraError> {
     let df = client.read(
         "gold_ohlcv_1m",
         &["BTC", "ETH", "SOL"],                 // any IntoCoins: one symbol, a slice, a Vec, …
-        MonthSpan::new("2026-07", "2026-08")?,  // any IntoMonths: one month, a span, a list, …
+        MonthSpan::new("2026-10", "2026-11")?,  // any IntoMonths: one month, a span, a list, …
         Some(&["time", "open", "high", "low", "close", "volume"]),
     )?;
     println!("{}", df.head(Some(5)));
@@ -129,8 +152,9 @@ fn main() -> Result<(), tessera::TesseraError> {
 }
 ```
 
-Months outside the trailing 12-month window are no longer served (`TesseraError::NotFound`)
-— call `partitions()` to discover what's available, as in the quickstart.
+Months outside the trailing 30-day window are not served (`TesseraError::NotFound`) unless
+your account holds a bundle covering them — call `partitions()` to discover what's
+available, as in the quickstart.
 
 ## Async
 
@@ -145,7 +169,7 @@ async fn main() -> Result<(), tessera::TesseraError> {
     let client = AsyncTesseraClient::new(None)?;
 
     let df = client
-        .read("gold_ohlcv_1m", &["BTC", "ETH"], "2026-08", None)
+        .read("gold_ohlcv_1m", &["BTC", "ETH"], "2026-10", None)
         .await?;
     println!("{} rows", df.height());
     Ok(())
@@ -171,7 +195,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = client.to_duckdb(
         "gold_ohlcv_1m",
         &["BTC", "ETH"],
-        "2026-08",
+        "2026-10",
         Some(&["time", "close", "volume"]),
     )?;
 
@@ -223,7 +247,8 @@ use tessera::{TesseraClient, TesseraError};
 fn main() -> Result<(), TesseraError> {
     let client = TesseraClient::new(None)?;
 
-    // Months outside the trailing 12-month window 404 → NotFound:
+    // Months outside the trailing 30-day window 404 → NotFound unless a
+    // bundle covers them:
     match client.read("gold_ohlcv_1m", "BTC", "2024-01", None) {
         Ok(df) => println!("{}", df.head(Some(5))),
         Err(TesseraError::NotFound { message, .. }) => {
@@ -247,7 +272,7 @@ Parquet bytes yourself:
 fn main() -> Result<(), tessera::TesseraError> {
     let client = tessera::TesseraClient::new(None)?;
 
-    // Every dataset visible to your plan: name, coins, month coverage, partition count.
+    // Every dataset visible to your entitlement: name, coins, month coverage, partition count.
     for ds in &client.datasets()?.datasets {
         let earliest = ds.months.earliest.as_deref().unwrap_or("?");
         let latest = ds.months.latest.as_deref().unwrap_or("?");
@@ -261,7 +286,7 @@ fn main() -> Result<(), tessera::TesseraError> {
     }
 
     // Presigned download URL for a single partition.
-    let download = client.download_url("gold_ohlcv_1m", "BTC", "2026-08")?;
+    let download = client.download_url("gold_ohlcv_1m", "BTC", "2026-10")?;
     println!("{} (expires at {})", download.url, download.expires_at);
     Ok(())
 }
