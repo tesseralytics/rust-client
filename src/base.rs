@@ -59,7 +59,7 @@ pub(crate) fn partitions_request(
     }
 }
 
-/// `GET /v1/datasets/{asset}/{coin}/{month}/download` — mint a presigned URL.
+/// `GET /v1/datasets/{asset}/{coin}/{month}/download` — mint presigned URLs.
 pub(crate) fn download_request(asset: &str, coin: &str, month: &str) -> PreparedRequest {
     PreparedRequest {
         path: format!(

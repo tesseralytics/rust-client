@@ -4,7 +4,7 @@
 //! constructed inside a tokio runtime; tests therefore run on plain threads
 //! and host the mock on a dedicated current-thread runtime.
 use serde_json::json;
-use tessera::{ClientConfig, TesseraClient, TesseraError};
+use tessera::{ClientConfig, DownloadBody, TesseraClient, TesseraError, download_urls};
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -169,8 +169,63 @@ fn download_url_parses_presign_json() {
     let download = client
         .download_url("gold_ohlcv_1m", "BTC", "2025-09")
         .unwrap();
-    assert_eq!(download.url, "https://storage.example.com/parquet");
-    assert_eq!(download.expires_at, "2025-01-01T00:15:00Z");
+    match download {
+        DownloadBody::DownloadResponse(single) => {
+            assert_eq!(single.url, "https://storage.example.com/parquet");
+            assert_eq!(single.expires_at, "2025-01-01T00:15:00Z");
+        }
+        DownloadBody::DayDownloadResponse(day_backed) => {
+            panic!("expected a single-object download, got {day_backed:?}")
+        }
+    }
+
+    rt.block_on(server.verify());
+}
+
+#[test]
+fn download_url_parses_open_month_days() {
+    let rt = mock_runtime();
+    let server = rt.block_on(MockServer::start());
+    rt.block_on(async {
+        // The open month is day-backed: no single `url`, one per day object.
+        Mock::given(method("GET"))
+            .and(path("/v1/datasets/gold_ohlcv_1m/BTC/2026-10/download"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "asset": "gold_ohlcv_1m",
+                "coin": "BTC",
+                "month": "2026-10",
+                "is_open": true,
+                "days": [
+                    {"date": "2026-10-02", "url": "https://storage.example.com/02.parquet", "expires_at": "t"},
+                    {"date": "2026-10-01", "url": "https://storage.example.com/01.parquet", "expires_at": "t"}
+                ]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+
+    let client = client(server.uri());
+    let download = client
+        .download_url("gold_ohlcv_1m", "BTC", "2026-10")
+        .unwrap();
+    let DownloadBody::DayDownloadResponse(day_backed) = download else {
+        panic!("expected a day-backed download");
+    };
+    assert!(day_backed.is_open);
+    let dates: Vec<&str> = day_backed
+        .days
+        .iter()
+        .map(|day| day.date.as_str())
+        .collect();
+    assert_eq!(dates, ["2026-10-02", "2026-10-01"]);
+    assert_eq!(
+        download_urls(DownloadBody::DayDownloadResponse(day_backed)).unwrap(),
+        [
+            "https://storage.example.com/01.parquet",
+            "https://storage.example.com/02.parquet"
+        ]
+    );
 
     rt.block_on(server.verify());
 }
@@ -202,4 +257,55 @@ fn missing_api_key_is_configuration_error() {
     let err = TesseraClient::new(None).unwrap_err();
     assert!(matches!(err, TesseraError::Configuration(_)), "got {err:?}");
     assert!(err.to_string().contains("No API key provided"));
+}
+
+#[cfg(feature = "polars")]
+#[test]
+fn open_month_read_concatenates_day_objects() {
+    use polars::prelude::*;
+
+    let dir = tempfile::tempdir().unwrap();
+    let write = |path: &std::path::Path, rows: u32| {
+        let times: Vec<i64> = (1..=rows).map(i64::from).collect();
+        let closes: Vec<f64> = (1..=rows).map(|row| 9.0 + f64::from(row)).collect();
+        let mut frame = df!["time" => times, "close" => closes].unwrap();
+        let file = std::fs::File::create(path).unwrap();
+        ParquetWriter::new(file).finish(&mut frame).unwrap();
+    };
+    let day_one = dir.path().join("2026-10-01.parquet");
+    let day_two = dir.path().join("2026-10-02.parquet");
+    write(&day_one, 2);
+    write(&day_two, 3);
+
+    let rt = mock_runtime();
+    let server = rt.block_on(MockServer::start());
+    rt.block_on(async {
+        Mock::given(method("GET"))
+            .and(path("/v1/datasets/gold_ohlcv_1m/BTC/2026-10/download"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "asset": "gold_ohlcv_1m",
+                "coin": "BTC",
+                "month": "2026-10",
+                "is_open": true,
+                "days": [
+                    {"date": "2026-10-02", "url": day_two.to_string_lossy(), "expires_at": "t"},
+                    {"date": "2026-10-01", "url": day_one.to_string_lossy(), "expires_at": "t"}
+                ]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+
+    let client = client(server.uri());
+    let frame = client
+        .read("gold_ohlcv_1m", "BTC", "2026-10", None)
+        .unwrap();
+    assert_eq!(frame.height(), 5, "both day objects must be read");
+    assert!(
+        frame.column("coin").is_err(),
+        "one logical partition stays pristine across day objects"
+    );
+
+    rt.block_on(server.verify());
 }

@@ -1,5 +1,8 @@
 //! Model helpers: month validation, spans, refs, coercion traits.
-use tessera::{IntoCoins, IntoMonths, MonthSpan, PartitionRef, TesseraError};
+use tessera::{
+    DayDownload, DayDownloadResponse, DownloadBody, DownloadResponse, IntoCoins, IntoMonths,
+    MonthSpan, PartitionRef, TesseraError, download_urls,
+};
 
 #[test]
 fn month_span_is_inclusive_and_crosses_years() {
@@ -104,4 +107,59 @@ fn into_months_rejects_empty() {
     let empty: [&str; 0] = [];
     let err = empty.into_months().unwrap_err();
     assert_eq!(err.to_string(), "at least one month is required");
+}
+
+#[test]
+fn download_urls_finalised_month_is_one_object() {
+    let body = DownloadBody::DownloadResponse(DownloadResponse {
+        url: "https://storage.example.com/2025-09.parquet".to_string(),
+        expires_at: "2025-01-01T00:15:00Z".to_string(),
+    });
+    assert_eq!(
+        download_urls(body).unwrap(),
+        ["https://storage.example.com/2025-09.parquet"]
+    );
+}
+
+#[test]
+fn download_urls_orders_day_objects_by_date() {
+    let day = |date: &str, url: &str| DayDownload {
+        date: date.to_string(),
+        url: url.to_string(),
+        expires_at: "2025-01-01T00:15:00Z".to_string(),
+    };
+    let body = DownloadBody::DayDownloadResponse(DayDownloadResponse {
+        asset: "gold_ohlcv_1m".to_string(),
+        coin: Some("BTC".to_string()),
+        month: "2026-10".to_string(),
+        is_open: true,
+        days: vec![
+            day("2026-10-02", "https://storage.example.com/02.parquet"),
+            day("2026-10-01", "https://storage.example.com/01.parquet"),
+        ],
+    });
+    assert_eq!(
+        download_urls(body).unwrap(),
+        [
+            "https://storage.example.com/01.parquet",
+            "https://storage.example.com/02.parquet"
+        ]
+    );
+}
+
+#[test]
+fn download_urls_rejects_day_backed_partition_without_days() {
+    let body = DownloadBody::DayDownloadResponse(DayDownloadResponse {
+        asset: "gold_ohlcv_1m".to_string(),
+        coin: Some("BTC".to_string()),
+        month: "2026-10".to_string(),
+        is_open: true,
+        days: Vec::new(),
+    });
+    let err = download_urls(body).unwrap_err();
+    assert!(
+        matches!(err, TesseraError::UnexpectedResponse(_)),
+        "got {err:?}"
+    );
+    assert!(err.to_string().contains("gold_ohlcv_1m/BTC/2026-10"));
 }

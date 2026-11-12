@@ -10,7 +10,8 @@ use crate::base::{
 use crate::config::{ClientConfig, backoff_delay};
 use crate::error::{TesseraError, error_from_response};
 use crate::models::{
-    DatasetsResponse, DownloadResponse, IntoCoins, IntoMonths, PartitionRef, PartitionsResponse,
+    DatasetsResponse, DownloadBody, IntoCoins, IntoMonths, PartitionRef, PartitionsResponse,
+    download_urls,
 };
 #[cfg(any(feature = "polars", feature = "duckdb"))]
 use crate::readers::ResolvedPartition;
@@ -113,7 +114,12 @@ impl AsyncTesseraClient {
         self.json(response).await
     }
 
-    /// Mint a short-lived presigned download URL for one partition.
+    /// Mint presigned download URLs for one partition.
+    ///
+    /// A finalised month is a single object ([`crate::DownloadResponse`]). The
+    /// open month is day-backed and answers with one URL per day
+    /// ([`crate::DayDownloadResponse`]); use [`download_urls`] to flatten either
+    /// shape into URLs.
     ///
     /// # Errors
     ///
@@ -123,7 +129,7 @@ impl AsyncTesseraClient {
         asset: &str,
         coin: &str,
         month: &str,
-    ) -> Result<DownloadResponse, TesseraError> {
+    ) -> Result<DownloadBody, TesseraError> {
         let response = self.request(&download_request(asset, coin, month)).await?;
         self.json(response).await
     }
@@ -158,7 +164,7 @@ impl AsyncTesseraClient {
                         download_request(&partition.asset, &partition.coin, &partition.month);
                     let response =
                         send_with_retries(&http, &base_url, max_retries, &prepared).await?;
-                    parse_json(response).await.map(|d: DownloadResponse| d.url)
+                    download_urls(parse_json(response).await?)
                 }
             },
             refs,

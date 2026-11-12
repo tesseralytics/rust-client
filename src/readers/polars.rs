@@ -20,8 +20,10 @@ const EXPIRY_MARKERS: [&str; 5] = [
 
 /// Build a (possibly concatenated) `LazyFrame` over the resolved partitions.
 ///
-/// For multi-partition reads, a `coin` and `month` column identifying the
-/// source partition are appended so rows stay attributable after concatenation.
+/// A day-backed partition contributes one frame per day object; they are
+/// concatenated like any other partitions. For multi-partition reads, a `coin`
+/// and `month` column identifying the source partition are appended so rows
+/// stay attributable after concatenation.
 ///
 /// # Errors
 ///
@@ -31,25 +33,28 @@ pub fn build_lazyframe(
     columns: Option<&[&str]>,
 ) -> Result<LazyFrame, TesseraError> {
     let multi = parts.len() > 1;
-    let mut frames = Vec::with_capacity(parts.len());
-    for (partition, url) in parts {
-        let mut lazy = LazyFrame::scan_parquet(url.as_str().into(), ScanArgsParquet::default())
-            .map_err(|err| TesseraError::Network(err.to_string()))?;
-        if let Some(columns) = columns {
-            lazy = lazy.select(
-                columns
-                    .iter()
-                    .map(|column| col(*column))
-                    .collect::<Vec<_>>(),
-            );
+    let objects: usize = parts.iter().map(|(_, urls)| urls.len()).sum();
+    let mut frames = Vec::with_capacity(objects);
+    for (partition, urls) in parts {
+        for url in urls {
+            let mut lazy = LazyFrame::scan_parquet(url.as_str().into(), ScanArgsParquet::default())
+                .map_err(|err| TesseraError::Network(err.to_string()))?;
+            if let Some(columns) = columns {
+                lazy = lazy.select(
+                    columns
+                        .iter()
+                        .map(|column| col(*column))
+                        .collect::<Vec<_>>(),
+                );
+            }
+            if multi {
+                lazy = lazy.with_columns(vec![
+                    lit(partition.coin.as_str()).alias("coin"),
+                    lit(partition.month.as_str()).alias("month"),
+                ]);
+            }
+            frames.push(lazy);
         }
-        if multi {
-            lazy = lazy.with_columns(vec![
-                lit(partition.coin.as_str()).alias("coin"),
-                lit(partition.month.as_str()).alias("month"),
-            ]);
-        }
-        frames.push(lazy);
     }
     if let [single] = &frames[..] {
         return Ok(single.clone());

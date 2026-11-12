@@ -14,11 +14,22 @@ fn sql_str(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
+/// One Parquet path, or a DuckDB list literal of paths for a day-backed
+/// partition (the open month is one object per day).
+fn sql_url_list(urls: &[String]) -> String {
+    if let [single] = urls {
+        return sql_str(single);
+    }
+    let quoted: Vec<String> = urls.iter().map(|url| sql_str(url)).collect();
+    format!("[{}]", quoted.join(", "))
+}
+
 /// Build an in-memory DuckDB connection with a `tessera` view over the
 /// resolved partitions.
 ///
-/// For multi-partition reads each leaf is unioned with a `coin` and `month`
-/// column identifying the source partition. Query it with
+/// A day-backed partition (the open month) reads all of its day objects as one
+/// leaf. For multi-partition reads each leaf is unioned with a `coin` and
+/// `month` column identifying the source partition. Query it with
 /// `SELECT ... FROM tessera`.
 ///
 /// # Errors
@@ -39,7 +50,7 @@ pub fn build_relation(
     let select_cols = columns.map_or_else(|| "*".to_string(), |columns| columns.join(", "));
     let selects: Vec<String> = parts
         .iter()
-        .map(|(partition, url)| {
+        .map(|(partition, urls)| {
             let projection = if multi {
                 format!(
                     "{}, {} AS coin, {} AS month",
@@ -50,7 +61,10 @@ pub fn build_relation(
             } else {
                 select_cols.clone()
             };
-            format!("SELECT {projection} FROM read_parquet({})", sql_str(url))
+            format!(
+                "SELECT {projection} FROM read_parquet({})",
+                sql_url_list(urls)
+            )
         })
         .collect();
     let query = selects.join("\nUNION ALL\n");

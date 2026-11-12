@@ -24,7 +24,7 @@ fn single_partition_is_queryable() {
 
     let parts = vec![(
         PartitionRef::new("gold_ohlcv_1m", "BTC", "2025-09").unwrap(),
-        path.to_string_lossy().to_string(),
+        vec![path.to_string_lossy().to_string()],
     )];
     let connection = build_relation(&parts, None).unwrap();
     let count: i64 = connection
@@ -44,11 +44,11 @@ fn multi_partition_unions_with_provenance() {
     let parts = vec![
         (
             PartitionRef::new("gold_ohlcv_1m", "BTC", "2025-09").unwrap(),
-            btc.to_string_lossy().to_string(),
+            vec![btc.to_string_lossy().to_string()],
         ),
         (
             PartitionRef::new("gold_ohlcv_1m", "ETH", "2025-10").unwrap(),
-            eth.to_string_lossy().to_string(),
+            vec![eth.to_string_lossy().to_string()],
         ),
     ];
     let connection = build_relation(&parts, None).unwrap();
@@ -75,11 +75,33 @@ fn projection_narrows_leaf_selects() {
 
     let parts = vec![(
         PartitionRef::new("gold_ohlcv_1m", "BTC", "2025-09").unwrap(),
-        path.to_string_lossy().to_string(),
+        vec![path.to_string_lossy().to_string()],
     )];
     let connection = build_relation(&parts, Some(&["close"])).unwrap();
     let close_sum: f64 = connection
         .query_row("SELECT sum(close) FROM tessera", [], |row| row.get(0))
         .unwrap();
     assert!((close_sum - 60.0).abs() < 1e-9);
+}
+
+#[test]
+fn day_backed_partition_reads_its_day_objects() {
+    let dir = tempfile::tempdir().unwrap();
+    let day_one = dir.path().join("2026-10-01.parquet");
+    let day_two = dir.path().join("2026-10-02.parquet");
+    write_sample_parquet(&day_one);
+    write_sample_parquet(&day_two);
+
+    let parts = vec![(
+        PartitionRef::new("gold_ohlcv_1m", "BTC", "2026-10").unwrap(),
+        vec![
+            day_one.to_string_lossy().to_string(),
+            day_two.to_string_lossy().to_string(),
+        ],
+    )];
+    let connection = build_relation(&parts, None).unwrap();
+    let count: i64 = connection
+        .query_row("SELECT count(*) FROM tessera", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(count, 10, "both day objects must be read");
 }

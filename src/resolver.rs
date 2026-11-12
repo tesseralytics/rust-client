@@ -1,7 +1,8 @@
 //! Concurrent presigned-URL resolution.
 //!
 //! Each `(asset, coin, month)` partition needs its own short-lived presigned
-//! URL, minted via the download endpoint. For multi-partition reads we resolve
+//! URL(s), minted via the download endpoint — one for a finalised month, one
+//! per day for the day-backed open month. For multi-partition reads we resolve
 //! them concurrently — a scoped thread pool for the sync client,
 //! `futures::try_join_all` for async.
 
@@ -30,16 +31,16 @@ pub const MAX_WORKERS: usize = 8;
 /// Panics if internal bookkeeping is inconsistent (a slot is unresolved
 /// although no error was recorded) — unreachable by construction.
 pub fn resolve_sync(
-    fetch_url: impl Fn(&PartitionRef) -> Result<String, TesseraError> + Sync,
+    fetch_urls: impl Fn(&PartitionRef) -> Result<Vec<String>, TesseraError> + Sync,
     refs: &[PartitionRef],
 ) -> Result<Vec<ResolvedPartition>, TesseraError> {
     if let [partition] = refs {
-        return Ok(vec![(partition.clone(), fetch_url(partition)?)]);
+        return Ok(vec![(partition.clone(), fetch_urls(partition)?)]);
     }
 
     let workers = MAX_WORKERS.min(refs.len());
     let next_index = AtomicUsize::new(0);
-    let urls: Mutex<Vec<Option<String>>> = Mutex::new(vec![None; refs.len()]);
+    let urls: Mutex<Vec<Option<Vec<String>>>> = Mutex::new(vec![None; refs.len()]);
     let first_error: Mutex<Option<TesseraError>> = Mutex::new(None);
 
     std::thread::scope(|scope| {
@@ -57,7 +58,7 @@ pub fn resolve_sync(
                     if index >= refs.len() {
                         break;
                     }
-                    match fetch_url(&refs[index]) {
+                    match fetch_urls(&refs[index]) {
                         Ok(url) => {
                             urls.lock().unwrap_or_else(PoisonError::into_inner)[index] = Some(url);
                         }
@@ -100,13 +101,13 @@ pub fn resolve_sync(
 ///
 /// Returns the first fetch error, if any.
 pub async fn resolve_async<F, Fut>(
-    fetch_url: F,
+    fetch_urls: F,
     refs: &[PartitionRef],
 ) -> Result<Vec<ResolvedPartition>, TesseraError>
 where
     F: Fn(PartitionRef) -> Fut,
-    Fut: Future<Output = Result<String, TesseraError>>,
+    Fut: Future<Output = Result<Vec<String>, TesseraError>>,
 {
-    let urls = try_join_all(refs.iter().map(|partition| fetch_url(partition.clone()))).await?;
+    let urls = try_join_all(refs.iter().map(|partition| fetch_urls(partition.clone()))).await?;
     Ok(refs.iter().cloned().zip(urls).collect())
 }

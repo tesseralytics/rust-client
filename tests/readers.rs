@@ -7,21 +7,28 @@ use tessera::readers::expand_refs;
 use tessera::readers::polars::{build_lazyframe, collect};
 use tessera::{MonthSpan, PartitionRef};
 
-/// Write a deterministic 5-row sample frame: `time` Int64, `close` Float64.
-fn write_sample_parquet(path: &std::path::Path) {
-    let mut frame = df![
-        "time" => [1i64, 2, 3, 4, 5],
-        "close" => [10.0f64, 11.0, 12.0, 13.0, 14.0],
-    ]
-    .unwrap();
+/// Write a deterministic sample frame of `rows` rows: `time` Int64, `close` Float64.
+fn write_sample_parquet_rows(path: &std::path::Path, rows: u32) {
+    let times: Vec<i64> = (1..=rows).map(i64::from).collect();
+    let closes: Vec<f64> = (1..=rows).map(|row| 9.0 + f64::from(row)).collect();
+    let mut frame = df!["time" => times, "close" => closes].unwrap();
     let file = std::fs::File::create(path).unwrap();
     ParquetWriter::new(file).finish(&mut frame).unwrap();
 }
 
-fn resolved(path: &std::path::Path, coin: &str, month: &str) -> (tessera::PartitionRef, String) {
+/// Write a deterministic 5-row sample frame.
+fn write_sample_parquet(path: &std::path::Path) {
+    write_sample_parquet_rows(path, 5);
+}
+
+fn resolved(
+    path: &std::path::Path,
+    coin: &str,
+    month: &str,
+) -> (tessera::PartitionRef, Vec<String>) {
     (
         PartitionRef::new("gold_ohlcv_1m", coin, month).unwrap(),
-        path.to_string_lossy().to_string(),
+        vec![path.to_string_lossy().to_string()],
     )
 }
 
@@ -119,13 +126,37 @@ fn collect_maps_403_to_presign_expired() {
     let url = format!("{}/expired.parquet", server.uri());
     let parts = vec![(
         PartitionRef::new("gold_ohlcv_1m", "BTC", "2025-09").unwrap(),
-        url,
+        vec![url],
     )];
     let lazy = build_lazyframe(&parts, None).unwrap();
     let err = rt.block_on(async { collect(lazy) }).unwrap_err();
     assert!(
         matches!(err, tessera::TesseraError::PresignExpired),
         "got {err:?}"
+    );
+}
+
+#[test]
+fn day_backed_partition_concatenates_its_day_objects() {
+    let dir = tempfile::tempdir().unwrap();
+    let day_one = dir.path().join("2026-10-01.parquet");
+    let day_two = dir.path().join("2026-10-02.parquet");
+    write_sample_parquet_rows(&day_one, 2);
+    write_sample_parquet_rows(&day_two, 3);
+
+    let parts = vec![(
+        PartitionRef::new("gold_ohlcv_1m", "BTC", "2026-10").unwrap(),
+        vec![
+            day_one.to_string_lossy().to_string(),
+            day_two.to_string_lossy().to_string(),
+        ],
+    )];
+    let frame = build_lazyframe(&parts, None).unwrap().collect().unwrap();
+    assert_eq!(frame.height(), 5, "both day objects must be read");
+    assert_eq!(frame.width(), 2);
+    assert!(
+        frame.column("coin").is_err(),
+        "one logical partition keeps its frame pristine, however many day objects it has"
     );
 }
 

@@ -13,11 +13,44 @@ mod generated {
 }
 
 pub use generated::{
-    DatasetSummary, DatasetsResponse, DownloadResponse, ErrorBody, MonthRange, Partition,
-    PartitionsResponse,
+    DatasetSummary, DatasetsResponse, DayDownload, DayDownloadResponse, DownloadBody,
+    DownloadResponse, ErrorBody, MonthRange, Partition, PartitionsResponse,
 };
 
 use crate::error::TesseraError;
+
+/// Flatten a download body into presigned URLs, oldest object first.
+///
+/// A finalised month is a single object and yields one URL. The open month is
+/// day-backed: it yields one URL per day, ordered by the `YYYY-MM-DD` day they
+/// cover, so concatenating them in order stays chronological.
+///
+/// # Errors
+///
+/// Returns [`TesseraError::UnexpectedResponse`] when a day-backed partition
+/// carries no day objects.
+pub fn download_urls(body: DownloadBody) -> Result<Vec<String>, TesseraError> {
+    match body {
+        DownloadBody::DownloadResponse(single) => Ok(vec![single.url]),
+        DownloadBody::DayDownloadResponse(day_backed) => {
+            let DayDownloadResponse {
+                asset,
+                coin,
+                mut days,
+                month,
+                ..
+            } = day_backed;
+            days.sort_by(|left, right| left.date.cmp(&right.date));
+            if days.is_empty() {
+                return Err(TesseraError::UnexpectedResponse(format!(
+                    "download of day-backed partition {asset}/{}/{month} returned no day objects",
+                    coin.as_deref().unwrap_or("-")
+                )));
+            }
+            Ok(days.into_iter().map(|day| day.url).collect())
+        }
+    }
+}
 
 /// Validate a `YYYY-MM` month string.
 ///
@@ -45,8 +78,9 @@ pub(crate) fn validate_month(month: &str) -> Result<(), TesseraError> {
 
 /// A fully-qualified reference to a single partition.
 ///
-/// A partition is one `(asset, coin, month)` Parquet object, e.g.
-/// `gold_ohlcv_1m` / `BTC` / `2025-09`.
+/// A partition is one `(asset, coin, month)` slice, e.g. `gold_ohlcv_1m` /
+/// `BTC` / `2025-09`. A finalised month is one Parquet object; the open month is
+/// day-backed and resolves to one object per day.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PartitionRef {
     /// Dataset name, e.g. `gold_ohlcv_1m`.
