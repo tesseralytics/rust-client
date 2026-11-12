@@ -10,7 +10,8 @@ use crate::base::{
 use crate::config::{ClientConfig, backoff_delay};
 use crate::error::{TesseraError, error_from_response};
 use crate::models::{
-    DatasetsResponse, DownloadResponse, IntoCoins, IntoMonths, PartitionRef, PartitionsResponse,
+    DatasetsResponse, DownloadBody, IntoCoins, IntoMonths, PartitionRef, PartitionsResponse,
+    download_urls,
 };
 #[cfg(any(feature = "polars", feature = "duckdb"))]
 use crate::readers::ResolvedPartition;
@@ -160,7 +161,12 @@ impl TesseraClient {
         Self::json(response)
     }
 
-    /// Mint a short-lived presigned download URL for one partition.
+    /// Mint presigned download URLs for one partition.
+    ///
+    /// A finalised month is a single object ([`crate::DownloadResponse`]). The
+    /// open month is day-backed and answers with one URL per day
+    /// ([`crate::DayDownloadResponse`]); use [`download_urls`] to flatten either
+    /// shape into URLs.
     ///
     /// # Errors
     ///
@@ -170,7 +176,7 @@ impl TesseraClient {
         asset: &str,
         coin: &str,
         month: &str,
-    ) -> Result<DownloadResponse, TesseraError> {
+    ) -> Result<DownloadBody, TesseraError> {
         let response = self.request(&download_request(asset, coin, month))?;
         Self::json(response)
     }
@@ -195,8 +201,11 @@ impl TesseraClient {
     fn resolve(&self, refs: &[PartitionRef]) -> Result<Vec<ResolvedPartition>, TesseraError> {
         resolve_sync(
             |partition| {
-                self.download_url(&partition.asset, &partition.coin, &partition.month)
-                    .map(|d| d.url)
+                download_urls(self.download_url(
+                    &partition.asset,
+                    &partition.coin,
+                    &partition.month,
+                )?)
             },
             refs,
         )

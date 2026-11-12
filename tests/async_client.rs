@@ -81,6 +81,42 @@ async fn multi_partition_read_carries_provenance() {
     server.verify().await;
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn open_month_read_concatenates_day_objects() {
+    let server = MockServer::start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let day_one = dir.path().join("2026-10-01.parquet");
+    let day_two = dir.path().join("2026-10-02.parquet");
+    write_sample_parquet(&day_one);
+    write_sample_parquet(&day_two);
+
+    Mock::given(method("GET"))
+        .and(path("/v1/datasets/gold_ohlcv_1m/BTC/2026-10/download"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "asset": "gold_ohlcv_1m",
+            "coin": "BTC",
+            "month": "2026-10",
+            "is_open": true,
+            "days": [
+                {"date": "2026-10-02", "url": day_two.to_string_lossy(), "expires_at": "t"},
+                {"date": "2026-10-01", "url": day_one.to_string_lossy(), "expires_at": "t"}
+            ]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client = client(server.uri());
+    let frame = client
+        .read("gold_ohlcv_1m", "BTC", "2026-10", None)
+        .await
+        .unwrap();
+    assert_eq!(frame.height(), 10, "both day objects must be read");
+    assert!(frame.column("coin").is_err(), "one logical partition");
+
+    server.verify().await;
+}
+
 #[tokio::test]
 async fn partition_refs_sync_helper() {
     let client = AsyncTesseraClient::new(Some("k")).unwrap();

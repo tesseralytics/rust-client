@@ -152,6 +152,10 @@ fn main() -> Result<(), tessera::TesseraError> {
 }
 ```
 
+The current month is *day-backed*: it has no single month object, so the API publishes one
+Parquet per day. `read`, `scan` and `to_duckdb` concatenate those day objects transparently —
+a partition is still one logical month, and provenance columns stay per partition.
+
 Months outside the trailing 30-day window are not served (`TesseraError::NotFound`) unless
 your account holds a bundle covering them — call `partitions()` to discover what's
 available, as in the quickstart.
@@ -285,9 +289,12 @@ fn main() -> Result<(), tessera::TesseraError> {
         println!("{} · {rows} rows · {} MiB", p.month, p.size_bytes / (1024 * 1024));
     }
 
-    // Presigned download URL for a single partition.
+    // Presigned download URLs for a single partition: one object for a
+    // finalised month, one per day for the day-backed open month.
     let download = client.download_url("gold_ohlcv_1m", "BTC", "2026-10")?;
-    println!("{} (expires at {})", download.url, download.expires_at);
+    for url in tessera::download_urls(download)? {
+        println!("{url}");
+    }
     Ok(())
 }
 ```

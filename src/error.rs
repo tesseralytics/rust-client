@@ -19,6 +19,10 @@ pub enum TesseraError {
     /// A network-level failure (connection/timeout) after exhausting retries.
     #[error("network error contacting Tessera: {0}")]
     Network(String),
+    /// The API answered successfully but with a body the client cannot use —
+    /// e.g. a day-backed partition download with no day objects.
+    #[error("{0}")]
+    UnexpectedResponse(String),
     /// A presigned download URL expired before the read completed.
     #[error(
         "A presigned download URL was rejected (likely expired). Presigned URLs are short-lived — call read()/scan() again to mint fresh ones."
@@ -99,6 +103,7 @@ impl TesseraError {
             Self::Configuration(_)
             | Self::InvalidArgument(_)
             | Self::Network(_)
+            | Self::UnexpectedResponse(_)
             | Self::PresignExpired => None,
         }
     }
@@ -117,6 +122,7 @@ impl TesseraError {
             Self::Configuration(_)
             | Self::InvalidArgument(_)
             | Self::Network(_)
+            | Self::UnexpectedResponse(_)
             | Self::PresignExpired => None,
         }
     }

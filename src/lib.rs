@@ -79,6 +79,7 @@ pub use crate::client::TesseraClient;
 pub use crate::config::{API_KEY_ENV_VAR, ClientConfig, DEFAULT_BASE_URL, USER_AGENT};
 pub use crate::error::{TesseraError, error_from_response};
 pub use crate::models::{
-    DatasetSummary, DatasetsResponse, DownloadResponse, ErrorBody, IntoCoins, IntoMonths,
-    MonthRange, MonthSpan, Partition, PartitionRef, PartitionsResponse,
+    DatasetSummary, DatasetsResponse, DayDownload, DayDownloadResponse, DownloadBody,
+    DownloadResponse, ErrorBody, IntoCoins, IntoMonths, MonthRange, MonthSpan, Partition,
+    PartitionRef, PartitionsResponse, download_urls,
 };

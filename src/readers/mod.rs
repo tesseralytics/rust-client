@@ -8,8 +8,10 @@ pub mod polars;
 use crate::error::TesseraError;
 use crate::models::{IntoCoins, IntoMonths, PartitionRef};
 #[cfg(any(feature = "polars", feature = "duckdb"))]
-/// A resolved partition: its reference plus a freshly-minted presigned URL.
-pub type ResolvedPartition = (PartitionRef, String);
+/// A resolved partition: its reference plus one presigned URL per object.
+///
+/// A finalised month is one object; the day-backed open month is one per day.
+pub type ResolvedPartition = (PartitionRef, Vec<String>);
 
 /// Expand `(asset, coins, months)` into the cartesian list of partitions.
 ///
